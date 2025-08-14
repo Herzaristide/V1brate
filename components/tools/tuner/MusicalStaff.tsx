@@ -8,8 +8,9 @@ interface MusicalStaffProps {
     freq: number;
     clarity: number;
     isTick?: boolean;
+    tickId?: number;
   }>;
-  accuracyColor: (freq: number | null) => string;
+  accuracyColor: (freq: number | null, clarity?: number) => string;
   getNoteLeft: (idx: number, total: number) => string;
 }
 
@@ -132,7 +133,7 @@ export default function MusicalStaff({
             if (position === null) return null;
 
             const accidental = getAccidental(item.note);
-            const colorClass = accuracyColor(item.freq);
+            const colorClass = accuracyColor(item.freq, item.clarity);
 
             return (
               <div
@@ -161,16 +162,23 @@ export default function MusicalStaff({
           })}
 
           {/* Metronome ticks */}
-          {notes
-            .filter((item) => item.isTick)
-            .map((_, idx) => (
+          {notes.map((item, idx) => {
+            if (!item.isTick) return null;
+
+            return (
               <div
-                key={`tick-${idx}`}
-                className="absolute top-0 bottom-0 w-px bg-blue-400/60 z-10"
-                style={{ left: getNoteLeft(idx, notes.length) }}
+                key={`metronome-${item.tickId || idx}`}
+                className="absolute top-0 bottom-0 w-1 z-15"
+                style={{
+                  left: getNoteLeft(idx, notes.length),
+                  background:
+                    'linear-gradient(to bottom, rgba(96, 165, 250, 0.9), rgba(59, 130, 246, 0.7))',
+                  boxShadow: '0 0 3px rgba(96, 165, 250, 0.6)'
+                }}
                 title="Metronome Beat"
               />
-            ))}
+            );
+          })}
         </div>
       </div>
     </div>
