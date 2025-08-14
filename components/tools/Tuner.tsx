@@ -555,7 +555,7 @@ const Tuner = React.memo(() => {
       </div>
 
       {/* Musical Staff */}
-      <div className="flex-1 w-full backdrop-blur-md bg-white/5 rounded-2xl p-4 border border-white/10 shadow-lg mt-4 min-h-0 overflow-hidden">
+      <div className="w-full h-80 backdrop-blur-md bg-white/5 rounded-2xl p-4 border border-white/10 shadow-lg mt-4 overflow-hidden">
         <MusicalStaff
           notes={latestNotes}
           accuracyColor={accuracyColor}
