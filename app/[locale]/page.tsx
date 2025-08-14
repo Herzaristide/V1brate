@@ -3,6 +3,7 @@
 import AnalyzerWidget from '@/components/tools/widgets/AnalyzerWidget';
 import ClockWidget from '@/components/tools/widgets/ClockWidget';
 import MetronomeWidget from '@/components/tools/widgets/MetronomeWidget';
+import MusicalStaffWidget from '@/components/tools/widgets/MusicalStaffWidget';
 import TunerWidget from '@/components/tools/widgets/TunerWidget';
 import WidgetManager, { WidgetConfig } from '@/components/ui/WidgetManager';
 import { MetronomeProvider } from '@/contexts/MetronomeContext';
@@ -36,6 +37,13 @@ const availableWidgets: WidgetConfig[] = [
     component: ClockWidget,
     defaultWidth: 250,
     defaultHeight: 150
+  },
+  {
+    id: 'MusicalStaff',
+    title: 'MusicalStaff',
+    component: MusicalStaffWidget,
+    defaultWidth: 400,
+    defaultHeight: 500
   }
 ];
 
