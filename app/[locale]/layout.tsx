@@ -76,7 +76,7 @@ export default async function RootLayout({
     <NextIntlClientProvider locale={locale} messages={messages}>
       <html
         lang={locale}
-        className={`h-screen w-screen p-4 box-border ${avenir.className}`}
+        className={`h-screen w-screen box-border ${avenir.className}`}
       >
         <body className="h-full w-full flex flex-col-reverse md:flex-row gap-4 box-border">
           {/* <SupabaseProvider> */}
