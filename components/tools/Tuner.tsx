@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
 import { usePitchDetection } from '../../utils/usePitchDetection';
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import MusicalStaff from './tuner/MusicalStaff';
+import React from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 
 const Tuner = React.memo(() => {
   const { freq, clarity } = usePitchDetection();
@@ -37,22 +37,46 @@ const Tuner = React.memo(() => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const beatCountRef = useRef<number>(0);
 
+  // Cleanup function for audio context
+  const cleanupAudioContext = useCallback(() => {
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close();
+      audioCtxRef.current = null;
+    }
+  }, []);
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      cleanupAudioContext();
+      if (metronomeInterval.current) {
+        clearInterval(metronomeInterval.current);
+        metronomeInterval.current = null;
+      }
+    };
+  }, [cleanupAudioContext]);
+
+  // Periodic cleanup of notes to prevent memory leaks
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      setLatestNotes((prev) => {
+        // If we have too many notes, keep only the most recent ones
+        if (prev.length > noteCount * 2) {
+          return prev.slice(-noteCount);
+        }
+        return prev;
+      });
+    }, 30000); // Clean up every 30 seconds
+
+    return () => clearInterval(cleanupInterval);
+  }, [noteCount]);
+
   // Optimized helper functions with shared calculations
   const A4 = 442;
-  const NOTES = [
-    'C',
-    'C♯',
-    'D',
-    'D♯',
-    'E',
-    'F',
-    'F♯',
-    'G',
-    'G♯',
-    'A',
-    'A♯',
-    'B'
-  ];
+  const NOTES = useMemo(
+    () => ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'],
+    []
+  );
 
   const calculateSemitones = useCallback((freq: number) => {
     return 12 * Math.log2(freq / A4);
@@ -67,7 +91,7 @@ const Tuner = React.memo(() => {
       const octave = Math.floor(noteIndex / 12);
       return `${note}${octave}`;
     },
-    [calculateSemitones]
+    [calculateSemitones, NOTES]
   );
 
   const noteAccuracy = useCallback(
@@ -101,30 +125,59 @@ const Tuner = React.memo(() => {
   // Optimized metronome sound generation with cached audio context
   const playMetronomeTick = useCallback(
     (isAccent = false) => {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext ||
-          (window as any).webkitAudioContext)();
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        try {
+          audioCtxRef.current = new (window.AudioContext ||
+            (window as any).webkitAudioContext)();
+        } catch (error) {
+          console.warn('Failed to create AudioContext:', error);
+          return;
+        }
       }
 
       const ctx = audioCtxRef.current;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
-      // Pre-calculated sound configurations for better performance
-      const soundConfig =
-        metronomeSound === 'beep'
-          ? { type: 'sine' as OscillatorType, freq: isAccent ? 1200 : 800 }
-          : metronomeSound === 'wood'
-          ? { type: 'triangle' as OscillatorType, freq: isAccent ? 2000 : 1500 }
-          : { type: 'square' as OscillatorType, freq: isAccent ? 1200 : 1000 };
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
 
-      osc.type = soundConfig.type;
-      osc.frequency.value = soundConfig.freq;
-      gain.gain.value = isAccent ? metronomeVolume * 1.5 : metronomeVolume;
+        // Pre-calculated sound configurations for better performance
+        const soundConfig =
+          metronomeSound === 'beep'
+            ? { type: 'sine' as OscillatorType, freq: isAccent ? 1200 : 800 }
+            : metronomeSound === 'wood'
+            ? {
+                type: 'triangle' as OscillatorType,
+                freq: isAccent ? 2000 : 1500
+              }
+            : {
+                type: 'square' as OscillatorType,
+                freq: isAccent ? 1200 : 1000
+              };
 
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + (isAccent ? 0.1 : 0.07));
+        osc.type = soundConfig.type;
+        osc.frequency.value = soundConfig.freq;
+        gain.gain.value = isAccent ? metronomeVolume * 1.5 : metronomeVolume;
+
+        osc.connect(gain).connect(ctx.destination);
+
+        const startTime = ctx.currentTime;
+        const duration = isAccent ? 0.1 : 0.07;
+
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+
+        // Clean up oscillator after it stops
+        osc.addEventListener('ended', () => {
+          osc.disconnect();
+          gain.disconnect();
+        });
+      } catch (error) {
+        console.warn('Failed to play metronome tick:', error);
+      }
     },
     [metronomeSound, metronomeVolume]
   );
@@ -158,7 +211,7 @@ const Tuner = React.memo(() => {
     const timeSinceLastUpdate = now - addNoteRef.current;
     const freqChange = Math.abs(freq - lastFreqRef.current);
 
-    // Standard throttling at 60fps
+    // Standard throttling at 60fps (16ms) with frequency change threshold
     if (freqChange <= 10 && timeSinceLastUpdate < 16) return;
 
     addNoteRef.current = now;
@@ -166,16 +219,23 @@ const Tuner = React.memo(() => {
 
     const note = frequencyToNote(freq);
     setLatestNotes((prev) => {
-      const newNotes = [...prev, { note, freq, clarity }];
-      // Use the user-defined note count
-      return newNotes.length > noteCount
-        ? newNotes.slice(-noteCount)
-        : newNotes;
+      // Ensure we don't exceed the maximum note count to prevent memory issues
+      const maxNotes = Math.min(noteCount, 1000); // Cap at 1000 notes for safety
+      const newNote = { note, freq, clarity };
+
+      if (prev.length >= maxNotes) {
+        // Replace the oldest note instead of growing the array
+        const newNotes = [...prev.slice(1), newNote];
+        return newNotes;
+      } else {
+        return [...prev, newNote];
+      }
     });
   }, [freq, clarity, frequencyToNote, scrollingEnabled, noteCount]);
 
   // Optimized metronome effect with pre-calculated interval
   useEffect(() => {
+    // Clean up existing interval
     if (metronomeInterval.current) {
       clearInterval(metronomeInterval.current);
       metronomeInterval.current = null;
@@ -193,16 +253,19 @@ const Tuner = React.memo(() => {
       playMetronomeTick(isAccent);
       beatCountRef.current = (beatCountRef.current + 1) % beatsPerMeasure;
 
-      // Optimized metronome tick marking
+      // Optimized metronome tick marking - only if we have notes
       setLatestNotes((prev) => {
         if (prev.length === 0) return prev;
         const newNotes = [...prev];
         const lastIndex = newNotes.length - 1;
-        newNotes[lastIndex] = { ...newNotes[lastIndex], isTick: true };
+        if (lastIndex >= 0) {
+          newNotes[lastIndex] = { ...newNotes[lastIndex], isTick: true };
+        }
         return newNotes;
       });
     }, interval);
 
+    // Cleanup function
     return () => {
       if (metronomeInterval.current) {
         clearInterval(metronomeInterval.current);
@@ -225,21 +288,31 @@ const Tuner = React.memo(() => {
     [freq, accuracyColor]
   );
 
-  // Calculate color ratio for visible notes
+  // Calculate color ratio for visible notes - memoized with throttling
   const colorRatio = useMemo(() => {
     if (!latestNotes.length) return null;
+
     let green = 0,
       yellow = 0,
       orange = 0,
       red = 0;
-    latestNotes.forEach((n) => {
+
+    // Only calculate for the most recent notes to improve performance
+    const notesToAnalyze = latestNotes.slice(
+      -Math.min(100, latestNotes.length)
+    );
+
+    notesToAnalyze.forEach((n) => {
       const color = accuracyColor(n.freq);
       if (color.includes('green')) green++;
       else if (color.includes('yellow')) yellow++;
       else if (color.includes('orange')) orange++;
       else if (color.includes('red')) red++;
     });
+
     const total = green + yellow + orange + red;
+    if (total === 0) return null;
+
     return {
       green: (green / total) * 100,
       yellow: (yellow / total) * 100,
@@ -344,6 +417,7 @@ const Tuner = React.memo(() => {
                 value={timeSignature}
                 onChange={(e) => setTimeSignature(e.target.value)}
                 className="bg-white/10 backdrop-blur-md text-white rounded-md px-2 py-1 border border-white/20 focus:border-white/40 focus:outline-none transition-all duration-200 text-xs"
+                aria-label="Time signature selection"
               >
                 <option value="2/4" className="bg-gray-800">
                   2/4
@@ -387,6 +461,7 @@ const Tuner = React.memo(() => {
                 value={metronomeSound}
                 onChange={(e) => setMetronomeSound(e.target.value)}
                 className="bg-white/10 backdrop-blur-md text-white rounded-md px-2 py-1 border border-white/20 focus:border-white/40 focus:outline-none transition-all duration-200 text-xs"
+                aria-label="Metronome sound type selection"
               >
                 <option value="click" className="bg-gray-800">
                   Click
@@ -422,6 +497,7 @@ const Tuner = React.memo(() => {
                 value={noteRange}
                 onChange={(e) => setNoteRange(e.target.value as any)}
                 className="bg-white/10 backdrop-blur-md text-white rounded-md px-2 py-1 border border-white/20 focus:border-white/40 focus:outline-none transition-all duration-200 text-xs"
+                aria-label="Note range selection"
               >
                 <option value="violin" className="bg-gray-800">
                   Violin
@@ -464,12 +540,14 @@ const Tuner = React.memo(() => {
               <input
                 type="number"
                 min={10}
-                max={1000}
-                value={noteCount}
-                onChange={(e) => setNoteCount(Number(e.target.value))}
+                max={500}
+                value={Math.min(noteCount, 500)}
+                onChange={(e) =>
+                  setNoteCount(Math.min(Number(e.target.value), 500))
+                }
                 className="w-16 h-7 text-white bg-white/10 backdrop-blur-md rounded-lg px-2 py-1 border border-white/20 focus:border-white/40 focus:outline-none transition-all duration-200 text-xs"
                 disabled={!scrollingEnabled}
-                title={`Number of notes to display: ${noteCount}`}
+                title={`Number of notes to display: ${noteCount} (max 500)`}
               />
             </div>
           </div>
