@@ -64,11 +64,21 @@ const TunerWidget = React.memo(() => {
     [clarity]
   );
 
-  // Calculate horizontal position for notes
-  const getNoteLeft = useCallback((index: number, total: number) => {
-    const percentage = total > 1 ? (index / (total - 1)) * 80 + 10 : 50;
-    return `${percentage}%`;
-  }, []);
+  // Calculate horizontal position for notes - use fixed buffer size for consistent speed
+  const getNoteLeft = useCallback(
+    (index: number, total: number) => {
+      // Always use noteCount for consistent positioning, regardless of current buffer size
+      const effectiveTotal = Math.max(noteCount, 1);
+      // Calculate the position based on the note's actual index in the full buffer
+      const adjustedIndex = Math.max(0, noteCount - total + index);
+      const percentage =
+        effectiveTotal > 1
+          ? (adjustedIndex / (effectiveTotal - 1)) * 80 + 10
+          : 50;
+      return `${percentage}%`;
+    },
+    [noteCount]
+  );
 
   // Add new notes
   useEffect(() => {
