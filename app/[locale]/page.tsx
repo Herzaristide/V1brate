@@ -4,6 +4,7 @@ import MetronomeWidget from '@/components/tools/widgets/MetronomeWidget';
 import MusicalStaffWidget from '@/components/tools/widgets/MusicalStaffWidget';
 import NotesReadingWidget from '@/components/tools/widgets/NotesReadingWidget';
 import TunerWidget from '@/components/tools/widgets/TunerWidget';
+import YouTubeMusicWidget from '@/components/tools/widgets/YouTubeMusicWidget';
 import WidgetManager, { WidgetConfig } from '@/components/ui/WidgetManager';
 import { MetronomeProvider } from '@/contexts/MetronomeContext';
 import { useTranslations } from 'next-intl';
@@ -50,6 +51,13 @@ const availableWidgets: WidgetConfig[] = [
     component: NotesReadingWidget,
     defaultWidth: 600,
     defaultHeight: 400
+  },
+  {
+    id: 'youtubeMusic',
+    title: 'YouTube Music',
+    component: YouTubeMusicWidget,
+    defaultWidth: 800,
+    defaultHeight: 600
   }
 ];
 
