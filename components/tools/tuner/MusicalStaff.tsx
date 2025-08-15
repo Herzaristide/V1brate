@@ -9,6 +9,7 @@ interface MusicalStaffProps {
     clarity: number;
     isTick?: boolean;
     tickId?: number;
+    isVisible?: boolean; // Flag to control display
   }>;
   accuracyColor: (freq: number | null, clarity?: number) => string;
   getNoteLeft: (idx: number, total: number) => string;
@@ -128,7 +129,13 @@ export default function MusicalStaff({
 
           {/* Notes */}
           {notes.map((item, idx) => {
-            if (item.clarity <= 0.7) return null;
+            // Check visibility flag first, then fallback to clarity check for backward compatibility
+            const shouldDisplay =
+              item.isVisible !== undefined
+                ? item.isVisible
+                : item.clarity > 0.9;
+            if (!shouldDisplay) return null;
+
             const position = getNotePosition(item.note);
             if (position === null) return null;
 

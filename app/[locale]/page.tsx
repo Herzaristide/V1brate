@@ -1,9 +1,11 @@
 import AnalyzerWidget from '@/components/tools/widgets/AnalyzerWidget';
 import ClockWidget from '@/components/tools/widgets/ClockWidget';
+import DroneNoteWidget from '@/components/tools/widgets/DroneNoteWidget';
 import MetronomeWidget from '@/components/tools/widgets/MetronomeWidget';
 import MusicalStaffWidget from '@/components/tools/widgets/MusicalStaffWidget';
 import NotesReadingWidget from '@/components/tools/widgets/NotesReadingWidget';
 import TunerWidget from '@/components/tools/widgets/TunerWidget';
+import WaveformWidget from '@/components/tools/widgets/WaveformWidget';
 import YouTubeMusicWidget from '@/components/tools/widgets/YouTubeMusicWidget';
 import WidgetManager, { WidgetConfig } from '@/components/ui/WidgetManager';
 import { MetronomeProvider } from '@/contexts/MetronomeContext';
@@ -30,6 +32,20 @@ const availableWidgets: WidgetConfig[] = [
     component: AnalyzerWidget,
     defaultWidth: 450,
     defaultHeight: 350
+  },
+  {
+    id: 'waveform',
+    title: 'Audio Waveform',
+    component: WaveformWidget,
+    defaultWidth: 500,
+    defaultHeight: 300
+  },
+  {
+    id: 'droneNote',
+    title: 'Drone Notes',
+    component: DroneNoteWidget,
+    defaultWidth: 320,
+    defaultHeight: 480
   },
   {
     id: 'clock',

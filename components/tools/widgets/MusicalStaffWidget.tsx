@@ -16,6 +16,7 @@ const MusicalStaffWidget = React.memo(() => {
       clarity: number;
       isTick?: boolean;
       tickId?: number;
+      isVisible?: boolean; // Flag to control display
     }>
   >([]);
 
@@ -51,17 +52,44 @@ const MusicalStaffWidget = React.memo(() => {
     return noteNames[adjustedNoteIndex] + octave;
   }, []);
 
-  // Color based on individual note accuracy
+  // Get exact frequency for a note
+  const getNoteFrequency = useCallback((frequency: number): number => {
+    if (!frequency || frequency < 20) return 0;
+    const A4 = 442;
+    const semitonesFromA4 = Math.round(12 * Math.log2(frequency / A4));
+    return A4 * Math.pow(2, semitonesFromA4 / 12);
+  }, []);
+
+  // Calculate difference in cents
+  const getCentsDifference = useCallback(
+    (detectedFreq: number, targetFreq: number): number => {
+      if (!detectedFreq || !targetFreq) return 0;
+      return Math.round(1200 * Math.log2(detectedFreq / targetFreq));
+    },
+    []
+  );
+
+  // Color based on cents difference from target note
   const accuracyColor = useCallback(
     (frequency: number | null, noteClarity?: number) => {
       if (!frequency) return 'bg-gray-400';
       const clarityToUse = noteClarity !== undefined ? noteClarity : clarity;
-      if (clarityToUse < 0.7) return 'bg-gray-400';
-      if (clarityToUse > 0.95) return 'bg-green-400';
-      if (clarityToUse > 0.85) return 'bg-yellow-400';
-      return 'bg-red-400';
+
+      // Still require minimum clarity for any color
+      if (clarityToUse < 0.6) return 'bg-gray-400';
+
+      // Calculate cents difference from target note
+      const targetFreq = getNoteFrequency(frequency);
+      const centsDiff = getCentsDifference(frequency, targetFreq);
+      const absCents = Math.abs(centsDiff);
+
+      // Color based on cents accuracy
+      if (absCents <= 5) return 'bg-green-400'; // Perfect (±5 cents)
+      if (absCents <= 15) return 'bg-yellow-400'; // Close (±15 cents)
+      if (absCents <= 30) return 'bg-orange-400'; // Acceptable (±30 cents)
+      return 'bg-red-400'; // Off (>30 cents)
     },
-    [clarity]
+    [clarity, getNoteFrequency, getCentsDifference]
   );
 
   // Calculate horizontal position for notes - use fixed buffer size for consistent speed
@@ -80,13 +108,23 @@ const MusicalStaffWidget = React.memo(() => {
     [noteCount]
   );
 
-  // Add new notes
+  // Add new notes - always add but mark visibility based on clarity
   useEffect(() => {
-    if (freq && clarity > 0.6) {
+    if (freq) {
+      // Lower threshold to capture more attempts
       const note = getNote(freq);
       if (note) {
         setLatestNotes((prev) => {
-          const newNotes = [...prev, { note, freq, clarity }];
+          const newNotes = [
+            ...prev,
+            {
+              note,
+              freq,
+              clarity,
+              // Add a flag to indicate if this note should be displayed
+              isVisible: clarity > 0.6 // Only display notes with decent clarity
+            }
+          ];
           return newNotes.slice(-noteCount);
         });
       }
@@ -113,7 +151,8 @@ const MusicalStaffWidget = React.memo(() => {
                 freq: 0,
                 clarity: 0,
                 isTick: true,
-                tickId: now
+                tickId: now,
+                isVisible: true // Metronome ticks are always visible
               }
             ];
             return newNotes.slice(-noteCount);
