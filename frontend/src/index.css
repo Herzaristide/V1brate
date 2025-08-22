@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors duration-200 font-medium;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200 font-medium;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors duration-200 font-medium;
+  }
+
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+
+  .widget-container {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden;
+  }
+
+  .widget-header {
+    @apply bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between;
+  }
+
+  .widget-content {
+    @apply p-4;
+  }
+
+  .staff-line {
+    @apply stroke-gray-400 dark:stroke-gray-600;
+    stroke-width: 1;
+  }
+
+  .note-circle {
+    @apply fill-primary-600 stroke-primary-700;
+    stroke-width: 2;
+  }
+
+  .note-circle.sharp {
+    @apply fill-secondary-600 stroke-secondary-700;
+  }
+
+  .note-circle.flat {
+    @apply fill-accent-600 stroke-accent-700;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-effect {
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.8);
+  }
+
+  .dark .glass-effect {
+    background: rgba(17, 24, 39, 0.8);
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+  }
+
+  .gradient-secondary {
+    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Animation for pitch visualization */
+@keyframes pitch-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+.pitch-active {
+  animation: pitch-pulse 1s ease-in-out infinite;
+}
+
+/* Grid layout animations */
+.react-grid-item {
+  transition: all 200ms ease;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform;
+}
+
+.react-grid-item.resizing {
+  transition: none;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+}
+
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  bottom: 0;
+  right: 0;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6 6" style="background-color: white"><circle cx="3" cy="3" r="1" fill="gray"/></svg>');
+  background-position: bottom right;
+  padding: 0 3px 3px 0;
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  box-sizing: border-box;
+  cursor: se-resize;
+}

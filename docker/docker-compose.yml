@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: v1brate_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: v1brate_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - v1brate_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: v1brate_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@v1brate.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - v1brate_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  v1brate_network:
+    driver: bridge

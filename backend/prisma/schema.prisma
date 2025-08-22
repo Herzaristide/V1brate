@@ -1,0 +1,491 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums for type safety
+enum ProcessingStatus {
+  uploaded
+  processing
+  completed
+  failed
+}
+
+enum AnalysisType {
+  realtime
+  recording
+  batch
+}
+
+enum NotationSystem {
+  ABC
+  DoReMi
+}
+
+enum AccidentalSystem {
+  sharp
+  flat
+}
+
+enum WidgetType {
+  tuner
+  metronome
+  pitchAnalyzer
+  waveform
+  frequencyAnalyzer
+  musicalStaff
+  recording
+  droneNote
+  clock
+  pitchTest
+}
+
+enum ActivityType {
+  login
+  logout
+  recording
+  analysis
+  practice
+  widget_create
+  widget_update
+  widget_delete
+}
+
+enum UserRole {
+  user
+  admin
+}
+
+enum SubscriptionTier {
+  free
+  premium
+  pro
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  expired
+  trial
+  pending
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  username          String?  @unique
+  displayName       String?
+  imageUrl          String?
+  password          String?
+  
+  // OAuth providers
+  discordId         String?  @unique @map("discord_id")
+  googleId          String?  @unique @map("google_id")
+  
+  // User role and permissions
+  role              UserRole @default(user)
+  
+  // User preferences
+  notationSystem    NotationSystem   @default(ABC) @map("notation_system")
+  accidentalSystem  AccidentalSystem @default(sharp) @map("accidental_system")
+  // Standard pitch in Hertz for this user (note name intentionally 'standartPitch')
+  standartPitch     Float    @default(440.0) @map("standart_pitch")
+  
+  // Dashboard layout (deprecated - use WidgetConfig instead)
+  dashboardLayout   Json?    @map("dashboard_layout")
+  
+  // User status
+  isActive          Boolean  @default(true) @map("is_active")
+  isEmailVerified   Boolean  @default(false) @map("is_email_verified")
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  lastLogin         DateTime? @map("last_login")
+  
+  // Relations
+  recordings        Recording[]
+  pitchAnalyses     PitchAnalysis[]
+  notes             Note[]
+  bookmarks         Bookmark[]
+  widgetConfigs     WidgetConfig[]
+  widgetPresets     WidgetPreset[]
+  sessions          Session[]
+  activities        UserActivity[]
+  auditLogs         AuditLog[]
+  subscription      Subscription?
+  payments          Payment[]
+  
+  @@index([email])
+  @@index([username])
+  @@index([isActive])
+  @@index([role])
+  @@map("users")
+}
+
+model Recording {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  filename          String
+  originalName      String   @map("original_name")
+  mimeType          String   @map("mime_type")
+  size              BigInt   // File size in bytes
+  duration          Float?   // Duration in seconds
+  
+  // File paths
+  audioPath         String   @map("audio_path")
+  
+  // Metadata
+  title             String?
+  description       String?
+  musicalKey        String?  @map("musical_key")
+  
+  // Recording quality metrics
+  sampleRate        Int?     @map("sample_rate") // Hz (typically 44100, 48000)
+  bitRate           Int?     @map("bit_rate") // kbps
+  channels          Int?     @default(1) // mono=1, stereo=2
+  
+  // Processing status
+  processingStatus  ProcessingStatus @default(uploaded) @map("processing_status")
+  
+  // Soft delete
+  deletedAt         DateTime? @map("deleted_at")
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pitchAnalyses     PitchAnalysis[]
+  notes             Note[]
+  bookmarks         Bookmark[]
+  recordingStat     RecordingStat?
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([processingStatus])
+  @@index([musicalKey])
+  @@index([deletedAt])
+  @@map("recordings")
+}
+
+model PitchAnalysis {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  recordingId       String?  @map("recording_id")
+  
+  // Pitch data as JSON
+  pitchData         Json     @map("pitch_data") @db.JsonB // Array of pitch points with timestamp, frequency, note, cents, etc.
+  
+  // Analysis metadata
+  analysisType      AnalysisType @default(realtime) @map("analysis_type")
+  musicalKey        String?  @map("musical_key")
+  notationSystem    NotationSystem @default(ABC) @map("notation_system")
+  
+  // Analysis settings
+  bufferSize        Int      @default(250) @map("buffer_size")
+  sampleRate        Int?     @map("sample_rate") // Hz - important for pitch analysis
+  algorithm         String?  @default("yin") // yin, fft, autocorrelation, etc.
+  windowFunction    String?  @default("hanning") @map("window_function")
+  
+  // Quality metrics
+  confidence        Float?   // Overall analysis confidence 0.0-1.0
+  dataPoints        Int?     @map("data_points") // Number of pitch points
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recording         Recording? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
+  notes             Note[]
+  
+  @@index([userId])
+  @@index([recordingId])
+  @@index([analysisType])
+  @@index([createdAt])
+  @@map("pitch_analyses")
+}
+
+// User-created note attached to a specific timecode (on a Recording or PitchAnalysis)
+model Note {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  recordingId       String?  @map("recording_id")
+  pitchAnalysisId   String?  @map("pitch_analysis_id")
+  time              Float?   @map("time") // seconds
+  text              String
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recording         Recording? @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  pitchAnalysis     PitchAnalysis? @relation(fields: [pitchAnalysisId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([recordingId])
+  @@index([pitchAnalysisId])
+  @@map("notes")
+}
+
+// Simple bookmark tied to a recording at a timecode (for quick navigation)
+model Bookmark {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  recordingId       String   @map("recording_id")
+  time              Float    @map("time") // seconds
+  label             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recording         Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([recordingId])
+  @@index([time])
+  @@map("bookmarks")
+}
+
+// Aggregated stats for a recording (pre-computed for fast display)
+model RecordingStat {
+  id                String   @id @default(uuid())
+  recordingId       String   @unique @map("recording_id")
+  averageAccuracy   Float?   @map("average_accuracy")
+  noteCount         Int?     @map("note_count")
+  duration          Float?   // copied from Recording.duration for convenience
+  peakFrequency     Float?   @map("peak_frequency")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  recording         Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+
+  @@map("recording_stats")
+}
+
+// Individual widget instance configuration for a user's dashboard
+model WidgetConfig {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  
+  // Widget identification
+  widgetType        WidgetType @map("widget_type")
+  instanceId        String   @map("instance_id") // unique instance identifier (e.g., 'tuner-1703123456789')
+  
+  // Premium feature restrictions
+  isPremiumFeature  Boolean  @default(false) @map("is_premium_feature") // Requires subscription
+  
+  // Musical context for this widget instance
+  musicalKey        String?  @default("C") @map("musical_key") // Widget-specific musical key
+  
+  // Layout properties
+  x                 Float    @default(0)
+  y                 Float    @default(0)
+  width             Float    @default(300)
+  height            Float    @default(200)
+  zIndex            Int?     @default(1) @map("z_index")
+  
+  // Widget-specific settings as JSON
+  settings          Json     @default("{}") @db.JsonB // tuner sensitivity, metronome BPM, etc.
+  
+  // Widget state
+  isVisible         Boolean  @default(true) @map("is_visible")
+  isMinimized       Boolean  @default(false) @map("is_minimized")
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, instanceId])
+  @@index([userId])
+  @@index([widgetType])
+  @@index([musicalKey])
+  @@map("widget_configs")
+}
+
+// Saved widget configuration presets that users can apply
+model WidgetPreset {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  name              String   // "Practice Setup", "Recording Session", etc.
+  description       String?
+  
+  // Preset configuration as JSON (array of widget configs)
+  widgetConfigs     Json     @map("widget_configs") @db.JsonB // Array of widget configurations
+  
+  // Preset metadata
+  isDefault         Boolean  @default(false) @map("is_default")
+  isPublic          Boolean  @default(false) @map("is_public") // For sharing presets
+  tags              String[] @default([]) // ['practice', 'recording', 'beginner']
+  
+  // Usage tracking
+  usageCount        Int      @default(0) @map("usage_count")
+  lastUsed          DateTime? @map("last_used")
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([isPublic])
+  @@map("widget_presets")
+}
+
+model Session {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  token             String   @unique
+  refreshToken      String?  @map("refresh_token")
+  userAgent         String?  @map("user_agent")
+  ipAddress         String?  @map("ip_address")
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  expiresAt         DateTime @map("expires_at")
+  lastUsed          DateTime @default(now()) @map("last_used")
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// User activity tracking for analytics and insights
+model UserActivity {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  activityType      ActivityType @map("activity_type")
+  duration          Int?     // Duration in seconds for time-based activities
+  metadata          Json?    @db.JsonB // Additional context data
+  resourceId        String?  @map("resource_id") // ID of related resource (recording, analysis, etc.)
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([activityType])
+  @@index([createdAt])
+  @@map("user_activities")
+}
+
+// System audit log for security and compliance
+model AuditLog {
+  id                String   @id @default(uuid())
+  userId            String?  @map("user_id") // Nullable for system actions
+  action            String   // 'create', 'update', 'delete', 'login', 'logout'
+  resource          String   // 'user', 'recording', 'widget_config', etc.
+  resourceId        String?  @map("resource_id")
+  oldValues         Json?    @map("old_values") @db.JsonB
+  newValues         Json?    @map("new_values") @db.JsonB
+  ipAddress         String?  @map("ip_address")
+  userAgent         String?  @map("user_agent")
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  
+  // Relations (optional - user might be deleted)
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// User subscription management
+model Subscription {
+  id                String             @id @default(uuid())
+  userId            String             @unique @map("user_id")
+  tier              SubscriptionTier   @default(free)
+  status            SubscriptionStatus @default(active)
+  
+  // Subscription details
+  startDate         DateTime           @default(now()) @map("start_date")
+  endDate           DateTime?          @map("end_date")
+  trialEndDate      DateTime?          @map("trial_end_date")
+  canceledAt        DateTime?          @map("canceled_at")
+  
+  // External subscription management (Stripe, etc.)
+  externalId        String?            @map("external_id") // Stripe subscription ID
+  externalCustomerId String?           @map("external_customer_id") // Stripe customer ID
+  
+  // Feature limits
+  maxRecordings     Int?               @default(10) @map("max_recordings") // null = unlimited
+  maxStorageBytes   BigInt?            @default(1073741824) @map("max_storage_bytes") // 1GB default
+  maxAnalysisTime   Int?               @default(3600) @map("max_analysis_time") // seconds per month
+  
+  // Timestamps
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments          Payment[]
+  
+  @@index([tier])
+  @@index([status])
+  @@index([endDate])
+  @@index([externalId])
+  @@map("subscriptions")
+}
+
+// Payment tracking for subscriptions
+model Payment {
+  id                String        @id @default(uuid())
+  userId            String        @map("user_id")
+  subscriptionId    String        @map("subscription_id")
+  
+  // Payment details
+  amount            Decimal       @db.Decimal(10, 2) // Amount in dollars
+  currency          String        @default("USD")
+  status            PaymentStatus @default(pending)
+  
+  // External payment processing
+  externalId        String?       @map("external_id") // Stripe payment intent ID
+  externalStatus    String?       @map("external_status") // Raw status from payment processor
+  
+  // Payment metadata
+  description       String?       // "Premium subscription - Monthly"
+  metadata          Json?         @db.JsonB // Additional payment data
+  
+  // Timestamps
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  paidAt            DateTime?     @map("paid_at")
+  
+  // Relations
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([externalId])
+  @@map("payments")
+}
